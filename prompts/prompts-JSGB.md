@@ -51,3 +51,19 @@ create a documenter subagent that must update outdated schemas and documentation
 
 15.
 @documenter update outdated documentation
+
+16. (Based on Code rabbit feedback)
+Verify each finding against the current code and only fix it if needed.
+
+In `@backend/src/application/services/candidateStageService.ts` around lines 8 -
+83, The code has a TOCTOU risk because it reads candidate, application, and
+interviewStep with plain prisma calls then calls Application.save() and
+re-fetches with prisma.findUnique outside a transaction; wrap the entire
+critical flow (the reads, validation, save, and re-fetch) in a single
+prisma.$transaction to make it atomic, replacing
+prisma.findUnique/findFirst/interviewStep reads with the transaction client
+(tx.findUnique/tx.findFirst) and pass that tx into the domain save so
+Application.save(tx) uses the same transaction client; ensure the final re-fetch
+of the updated application also uses tx.findUnique so the returned Application
+is the result of the same transaction and adjust the Application.save signature
+to accept an optional prisma client for this transaction.

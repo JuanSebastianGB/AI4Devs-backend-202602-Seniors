@@ -28,7 +28,8 @@ export class Application {
         this.interviewStep = data.interviewStep;
     }
 
-    async save() {
+    async save(client?: PrismaClient) {
+        const db = client || prisma;
         const applicationData: any = {
             positionId: this.positionId,
             candidateId: this.candidateId,
@@ -38,12 +39,12 @@ export class Application {
         };
 
         if (this.id) {
-            return await prisma.application.update({
+            return await db.application.update({
                 where: { id: this.id },
                 data: applicationData,
             });
         } else {
-            return await prisma.application.create({
+            return await db.application.create({
                 data: applicationData,
             });
         }
