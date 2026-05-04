@@ -35,7 +35,13 @@ create a subagent expert on analising plans based on the goal and the current ba
 Update the plan based on the findings
 
 10.
-@plan-analyst @docs/plans/PUT-candidates-id-stage_backend.md 
+@plan-analyst @docs/plans/PUT-candidates-id-stage_backend.md
 
 11.
 Update the plan based on the findings
+
+12.
+@backend-developer @docs/plans/GET-positions-id-candidates_backend.md
+
+13.
+@backend-developer @docs/plans/PUT-candidates-id-stage_backend.md
