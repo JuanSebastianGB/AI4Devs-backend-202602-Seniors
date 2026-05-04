@@ -9,7 +9,7 @@ This endpoint retrieves all candidates currently in process for a specific posit
 ### Layers Involved
 - **Presentation**: Route handler + Controller
 - **Application**: Service layer for business logic
-- **Domain**: Prisma models (Application, Candidate, Interview, InterviewStep)
+- **Domain**: Domain models (`Position`, `Application`, `Candidate`, `InterviewStep`, `Interview`) — use domain methods, NOT direct Prisma client
 
 ### Components/Files Referenced
 - Existing patterns: `backend/src/routes/candidateRoutes.ts`, `backend/src/presentation/controllers/candidateController.ts`, `backend/src/application/services/candidateService.ts`
@@ -37,22 +37,21 @@ This endpoint retrieves all candidates currently in process for a specific posit
   ```
 - **Implementation Steps**:
   1. **Validate Position Exists**:
-     - Use `prisma.position.findUnique({ where: { id: positionId } })`
+     - Use `Position.findOne(positionId)` (domain model, not direct Prisma)
      - If position not found, throw `new Error('Position not found')`
   2. **Query Applications with Related Data**:
-     - Use `prisma.application.findMany` with:
-       - `where: { positionId }`
-       - `include: { candidate: true, interviewStep: true, interviews: true }`
+     - Use `Application.findMany({ where: { positionId }, include: { candidate: true, interviewStep: true, interviews: true } })` (domain model)
   3. **Calculate Average Score per Candidate**:
      - For each application, iterate through `interviews`
-     - Calculate `averageScore = interviews.reduce((sum, i) => sum + i.score, 0) / interviews.length`
-     - Handle edge case: if no interviews or no scores, return `null` or `0`
+     - Filter out null scores: `const scores = interviews.map(i => i.score).filter((s): s is number => s !== null)`
+     - Calculate `averageScore = scores.length > 0 ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null`
+     - Handle edge case: if no interviews or no valid scores, return `null`
   4. **Map to Response DTO**:
      - Build `PositionCandidatesResponse[]` with:
        - `candidateId`, `fullName` (from `candidate.firstName + ' ' + candidate.lastName`)
        - `currentInterviewStep` (from `application.currentInterviewStep` or `interviewStep.name`)
        - `averageScore` (calculated)
-- **Dependencies**: `@prisma/client`
+- **Dependencies**: Domain models (`Position`, `Application`, `Candidate`, `InterviewStep`, `Interview`)
 - **Implementation Notes**:
   - Use Prisma's aggregation or raw query if performance is a concern
   - Ensure proper type definitions for the response
@@ -73,9 +72,9 @@ This endpoint retrieves all candidates currently in process for a specific posit
   3. **Return Success**:
      - `res.status(200).json(candidates)`
   4. **Error Handling**:
-     - Catch position not found → `404` with `{ error: 'Position not found' }`
-     - Catch validation errors → `400` with `{ error: error.message }`
-     - Catch generic errors → `500` with `{ error: 'Internal Server Error' }`
+     - Catch position not found → `404` with `{ message: 'Position not found' }`
+     - Catch validation errors → `400` with `{ message: error.message }`
+     - Catch generic errors → `500` with `{ message: 'Internal Server Error' }`
 - **Dependencies**: `Request`, `Response` from `express`
 - **Implementation Notes**: Follow existing controller patterns in `candidateController.ts`
 
@@ -119,8 +118,9 @@ This endpoint retrieves all candidates currently in process for a specific posit
      - Position does not exist → throw error caught by controller
   4. **Edge Cases**:
      - No candidates for position → return empty array
-     - Candidate with no interviews → averageScore is null or 0
-     - Candidate with interviews but no scores → exclude from average or return null
+     - Candidate with no interviews → averageScore is null
+     - Candidate with interviews but no scores (all null) → averageScore is null
+     - **CRITICAL**: Test that null scores do NOT produce NaN in response
 
 ### Step 6: Update Documentation
 - **Action**: Review and update technical documentation
@@ -149,6 +149,7 @@ This endpoint retrieves all candidates currently in process for a specific posit
 - [ ] Invalid ID returns 400
 - [ ] Average score calculation is correct
 - [ ] Full name is properly concatenated
+- [ ] **Null scores do NOT produce NaN** (critical edge case)
 - [ ] `pnpm --filter backend lint` passes
 - [ ] Tests pass: `pnpm --filter backend test`
 
@@ -156,7 +157,7 @@ This endpoint retrieves all candidates currently in process for a specific posit
 
 ```json
 {
-  "error": "Error message describing the issue"
+  "message": "Error message describing the issue"
 }
 ```
 

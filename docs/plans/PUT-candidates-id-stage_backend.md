@@ -20,6 +20,7 @@ This endpoint updates the current interview stage of a specific candidate. It al
 - `Application` has `currentInterviewStep` FK to `InterviewStep`
 - `Candidate` has many `Application` records (one per position)
 - `InterviewStep` belongs to `InterviewFlow` (defines the stages)
+- `Application` belongs to `Position` (which has `interviewFlowId`)
 
 ## 3. Implementation Steps
 
@@ -44,23 +45,27 @@ This endpoint updates the current interview stage of a specific candidate. It al
   1. **Validate Candidate Exists**:
      - Use `prisma.candidate.findUnique({ where: { id: candidateId } })`
      - If candidate not found, throw `new Error('Candidate not found')`
-  2. **Validate New Stage Exists**:
-     - Use `prisma.interviewStep.findUnique({ where: { id: newStageId } })`
-     - If stage not found, throw `new Error('Interview stage not found')`
-  3. **Find Candidate's Active Application**:
+  2. **Find Candidate's Active Application**:
      - Use `prisma.application.findFirst` with:
        - `where: { candidateId }`
        - `orderBy: { applicationDate: 'desc' }` (most recent application)
      - If no application found, throw `new Error('No application found for this candidate')`
-  4. **Update the Application's Stage**:
-     - Use `prisma.application.update` with:
-       - `where: { id: application.id }`
-       - `data: { currentInterviewStep: newStageId }`
-  5. **Return Updated Application** with related data
+  3. **Validate New Stage Exists**:
+     - Use `prisma.interviewStep.findUnique({ where: { id: newStageId } })`
+     - If stage not found, throw `new Error('Interview stage not found')`
+  4. **Validate InterviewFlow Consistency** (CRITICAL):
+     - Get the position's `interviewFlowId` from the application
+     - Verify the new stage belongs to the SAME interview flow
+     - If not matching, throw `new Error('Invalid stage for this position')`
+  5. **Update the Application's Stage**:
+     - Use domain model: `new Application({ id: application.id, currentInterviewStep: newStageId }).save()`
+     - Or use `prisma.application.update` with `where: { id: application.id }` and `data: { currentInterviewStep: newStageId }`
+  6. **Return Updated Application** with related data (include position, interviewStep)
 - **Dependencies**: `@prisma/client`
 - **Implementation Notes**:
   - Only update the most recent application for the candidate
-  - Ensure proper transaction handling if multiple updates are needed
+  - InterviewFlow consistency check is MANDATORY — prevents moving a candidate to a stage from a different interview flow
+  - Use domain model pattern: `new Model(data).save()` where applicable
 
 ### Step 2: Create CandidateStageController Method
 - **File**: `backend/src/presentation/controllers/candidateStageController.ts`
@@ -78,12 +83,13 @@ This endpoint updates the current interview stage of a specific candidate. It al
      - If `isNaN(newStageId)`, return `400` with `{ error: 'Invalid stage ID format' }`
   3. **Call Service**:
      - `const updatedApplication = await updateCandidateStage(candidateId, newStageId)`
-  4. **Return Success**:
-     - `res.status(200).json({ message: 'Candidate stage updated successfully', data: updatedApplication })`
-  5. **Error Handling**:
+  4. **Return Success** (standardized format):
+     - `res.status(200).json(updatedApplication)` — return the domain model directly
+  5. **Error Handling** (standardized to `{ error: string }`):
      - Catch candidate not found → `404` with `{ error: 'Candidate not found' }`
      - Catch stage not found → `400` with `{ error: 'Interview stage not found' }`
      - Catch no application → `404` with `{ error: 'No application found for this candidate' }`
+     - Catch interview flow mismatch → `400` with `{ error: 'Invalid stage for this position' }`
      - Catch validation errors → `400` with `{ error: error.message }`
      - Catch generic errors → `500` with `{ error: 'Internal Server Error' }`
 - **Dependencies**: `Request`, `Response` from `express`
@@ -111,31 +117,34 @@ This endpoint updates the current interview stage of a specific candidate. It al
 - **Implementation Steps**:
   1. Add import: `import candidateStageRoutes from './routes/candidateStageRoutes';`
   2. Add mount: `app.use('/candidates', candidateStageRoutes);`
-  3. Place after candidateRoutes mount (Express matches routes in order, so more specific routes should come first)
+  3. Mount BEFORE candidateRoutes — more specific routes should come first in Express
 - **Dependencies**: None
-- **Implementation Notes**: Ensure route mounting order doesn't conflict with other routes. The `PUT /candidates/:id` route for stage update should not conflict with `GET /candidates/:id` route.
+- **Implementation Notes**: `PUT /candidates/:id/stage` is more specific than other `/candidates/:id` routes, so it must be mounted first to avoid conflicts.
 
 ### Step 5: Write Unit Tests
-- **File**: `backend/src/__tests__/unit/candidateStageService.test.ts`
-- **Action**: Test `updateCandidateStage` service
-- **Test Cases**:
+- **File**: Verify test location — run `ls backend/src/__tests__/` to check existing structure before creating tests
+- **Action**: Test `updateCandidateStage` service and controller
+- **Service Test Cases** (in `candidateStageService.test.ts`):
   1. **Successful Cases**:
      - Successfully updates candidate stage when valid candidate and stage provided
      - Returns updated application with new stage
-  2. **Validation Errors**:
-     - Invalid candidate ID format
-     - Invalid stage ID format
-  3. **Not Found**:
-     - Candidate does not exist → throw error caught by controller
-     - Interview stage does not exist → throw error caught by controller
-     - No application found for candidate → throw error caught by controller
-  4. **Reference Validation**:
-     - Verify stage belongs to correct interview flow (optional business rule)
-  5. **Server Errors**:
-     - Database connection failures
-  6. **Edge Cases**:
+  2. **Not Found**:
+     - Candidate does not exist → throws 'Candidate not found'
+     - Interview stage does not exist → throws 'Interview stage not found'
+     - No application found for candidate → throws 'No application found for this candidate'
+  3. **InterviewFlow Consistency** (CRITICAL):
+     - Stage from different interview flow → throws 'Invalid stage for this position'
+     - Stage from correct interview flow → succeeds
+  4. **Edge Cases**:
      - Candidate with multiple applications (should update most recent)
      - Candidate with no applications
+  5. **Server Errors**:
+     - Database connection failures
+- **Controller Test Cases** (in `candidateStageController.test.ts`):
+  1. **Successful Response**: Returns 200 with updated application
+  2. **Invalid Candidate ID**: Returns 400
+  3. **Invalid Stage ID**: Returns 400
+  4. **Not Found Scenarios**: Returns appropriate 404
 
 ## 4. Implementation Order
 
@@ -154,10 +163,13 @@ This endpoint updates the current interview stage of a specific candidate. It al
 - [ ] Non-existent candidate returns 404
 - [ ] Non-existent stage returns 400
 - [ ] Candidate with no applications returns 404
+- [ ] Stage from wrong interview flow returns 400
 - [ ] `pnpm --filter backend lint` passes
 - [ ] Tests pass: `pnpm --filter backend test`
 
 ## 6. Error Response Format
+
+All error responses follow this standardized format:
 
 ```json
 {
@@ -172,6 +184,7 @@ This endpoint updates the current interview stage of a specific candidate. It al
 | Candidate not found | 404 |
 | Interview stage not found | 400 |
 | No application found | 404 |
+| Invalid stage for position (InterviewFlow mismatch) | 400 |
 | Internal server error | 500 |
 
 ## 7. Request/Response Format
@@ -193,14 +206,21 @@ Or alternatively:
 **Success Response** (200):
 ```json
 {
-  "message": "Candidate stage updated successfully",
-  "data": {
+  "id": 1,
+  "positionId": 1,
+  "candidateId": 1,
+  "applicationDate": "2024-01-15T10:00:00Z",
+  "currentInterviewStep": 2,
+  "notes": "Moved to technical interview",
+  "position": {
     "id": 1,
-    "positionId": 1,
-    "candidateId": 1,
-    "applicationDate": "2024-01-15T10:00:00Z",
-    "currentInterviewStep": 2,
-    "notes": "Moved to technical interview"
+    "title": "Backend Engineer",
+    "interviewFlowId": 1
+  },
+  "interviewStep": {
+    "id": 2,
+    "name": "Technical Interview",
+    "interviewFlowId": 1
   }
 }
 ```
@@ -221,6 +241,7 @@ Not applicable — this is an update operation for a specific field (stage).
 - **Package manager**: Use `pnpm` exclusively
 - **No TypeScript errors**: Run `pnpm --filter backend lint` before declaring done
 - **graphify**: After implementation, run `graphify update .` to update knowledge graph
+- **Domain Model Pattern**: Use `new Model(data).save()` pattern where applicable, consistent with `candidateService.ts`
 
 ## 11. Next Steps After Implementation
 
@@ -234,6 +255,20 @@ Not applicable — this is an update operation for a specific field (stage).
 
 - [ ] **Code Quality**: No `any` types, proper error handling, follows existing patterns
 - [ ] **Functionality**: Endpoint updates the candidate's currentInterviewStep correctly
-- [ ] **Testing**: Unit tests cover success, error, and edge cases
+- [ ] **InterviewFlow Validation**: Stage change is validated against position's interview flow
+- [ ] **Testing**: Unit tests cover success, error, InterviewFlow consistency, and edge cases
 - [ ] **Integration**: Route properly mounted and accessible at `/candidates/:id/stage`
 - [ ] **Documentation**: Updated `docs/data-model.md` or other relevant docs
+
+## 13. Critical Business Rule: InterviewFlow Consistency
+
+A candidate applies to a Position, and each Position belongs to an InterviewFlow. The InterviewFlow contains the stages (InterviewSteps). When updating a candidate's stage:
+
+**MUST** validate that the new stage belongs to the SAME InterviewFlow as the candidate's position.
+
+**Why this matters**: Without this check, you could move a candidate for a "Tech Hiring" flow to a stage from a "Sales Hiring" flow entirely — breaking the integrity of the hiring pipeline.
+
+**Validation Logic**:
+```
+application.position.interviewFlowId == newStage.interviewFlowId
+```

@@ -24,3 +24,18 @@ La puntuación media del candidato. Recuerda que cada entrevist (interview) real
 
 PUT /candidates/:id/stage
 Este endpoint actualizará la etapa del candidato movido. Permite modificar la fase actual del proceso de entrevista en la que se encuentra un candidato específico.
+
+7.
+create a subagent expert on analising plans based on the goal and the current base code, and that is completly aware to best code practices, and test practices. A plan is form example @docs/plans/GET-positions-id-candidates_backend.md
+
+8.
+@plan-analyst @docs/plans/GET-positions-id-candidates_backend.md
+
+9.
+Update the plan based on the findings
+
+10.
+@plan-analyst @docs/plans/PUT-candidates-id-stage_backend.md 
+
+11.
+Update the plan based on the findings
