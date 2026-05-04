@@ -45,3 +45,9 @@ Update the plan based on the findings
 
 13.
 @backend-developer @docs/plans/PUT-candidates-id-stage_backend.md
+
+14.
+create a documenter subagent that must update outdated schemas and documentation, including readme file
+
+15.
+@documenter update outdated documentation
