@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Application as PrismaApplication } from '@prisma/client';
 import { Interview } from './Interview';
 import { Candidate } from './Candidate';
 import { InterviewStep } from './InterviewStep';
@@ -28,7 +28,7 @@ export class Application {
         this.interviewStep = data.interviewStep;
     }
 
-    async save(client?: PrismaClient) {
+    async save(client?: any) {
         const db = client || prisma;
         const applicationData: any = {
             positionId: this.positionId,

@@ -4,7 +4,7 @@ import { updateCandidateStage } from '../../application/services/candidateStageS
 const prisma = new PrismaClient();
 
 jest.mock('@prisma/client', () => {
-    const mockPrismaClient = {
+    const mockPrismaClient: Record<string, any> = {
         candidate: {
             findUnique: jest.fn(),
         },
@@ -16,6 +16,7 @@ jest.mock('@prisma/client', () => {
         interviewStep: {
             findUnique: jest.fn(),
         },
+        $transaction: jest.fn((callback: (tx: Record<string, any>) => Promise<unknown>) => callback(mockPrismaClient)),
     };
     return {
         PrismaClient: jest.fn(() => mockPrismaClient),
