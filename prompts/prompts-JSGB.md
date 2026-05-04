@@ -67,3 +67,29 @@ Application.save(tx) uses the same transaction client; ensure the final re-fetch
 of the updated application also uses tx.findUnique so the returned Application
 is the result of the same transaction and adjust the Application.save signature
 to accept an optional prisma client for this transaction.
+
+
+17. (Based on Code Rabbit documentation)
+Verify each finding against the current code and only fix it if needed.
+
+In `@backend/eslint.config.js` around lines 1 - 8, The current config imports only
+eslint-config-prettier/flat (eslintConfigPrettier) which disables conflicting
+rules but does not run Prettier as a lint rule; replace or augment that export
+to use the eslint-plugin-prettier flat preset (import from
+'eslint-plugin-prettier/flat' and include it in the exported array instead of or
+in addition to eslintConfigPrettier) so Prettier runs as an ESLint rule (the
+equivalent of the old plugin:prettier/recommended) and formatting errors are
+reported by ESLint (update the exported array that currently references
+eslintConfigPrettier).
+
+
+18. (Based on Code Rabbit documentation)
+Verify each finding against the current code and only fix it if needed.
+
+In `@backend/package.json` at line 5, Remove the "type": "module" entry from
+package.json to restore CommonJS mode so existing tooling works: this will fix
+the dev script using ts-node-dev/ts-node v9 (avoid ERR_UNKNOWN_FILE_EXTENSION),
+allow jest test runs without experimental VM flags, and make production JS
+emitted by tsconfig.json ("module": "commonjs") run correctly; if you truly need
+ESM instead, update ts-node, ts-node-dev, ts-jest/jest configuration, and
+tsconfig to fully support ESM before re-adding "type": "module".
