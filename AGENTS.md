@@ -1,7 +1,7 @@
 #MANDATORY
 
 - As package manager only use pnpm
-- For library/dependency work: Always refresh library information using context7 MCP server.
+- You have to use context7 MCP server or EXA MCP server before start working with an external library
 - ZERO typescript or linter errros allowed
 
 ## 1. Think Before Coding
